@@ -91,21 +91,33 @@ module.exports = (function () {
 
   /* Lens class definition */
   var Lens = function (get, set) {
-    this.getter = get;
-    this.setter = set;
+    // this.getter = get;
+    // this.setter = set;
+
+    this.get = function (model) {
+      return get(model);
+    };
+
+    this.set = function (model, value) {
+      return set(model, value);
+    };
+
+    this.over = function (model, f) {
+      return set(model, f(get(model)));
+    };
   };
 
-  Lens.prototype.get = function (model) {
-    return this.getter(model);
-  };
+  // Lens.prototype.get = function (model) {
+  //   return this.getter(model);
+  // };
 
-  Lens.prototype.set = function (model, value) {
-    return this.setter(model, value);
-  };
+  // Lens.prototype.set = function (model, value) {
+  //   return this.setter(model, value);
+  // };
 
-  Lens.prototype.over = function (model, f) {
-    return this.set(model, f(this.get(model)));
-  };
+  // Lens.prototype.over = function (model, f) {
+  //   return this.set(model, f(this.get(model)));
+  // };
 
   Lens.compose = function () {
     return Array.prototype.slice.call(arguments)
