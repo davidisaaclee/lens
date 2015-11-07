@@ -2,8 +2,6 @@ var _ = require('lodash');
 var assert = require('assert');
 var lens = require('../lens');
 
-var objectPath = require('object-path');
-
 describe('Lenses', function () {
   beforeEach(function () {
     var barStringLens = (function () {
@@ -34,6 +32,7 @@ describe('Lenses', function () {
       firstLens: firstLens
     });
   });
+
 
   it('basically work', function () {
     var model1 = {
@@ -73,6 +72,7 @@ describe('Lenses', function () {
     );
   });
 
+
   it('can compose', function () {
     var firstBarString = lens.compose(this.barStringLens, this.firstLens);
 
@@ -111,6 +111,7 @@ describe('Lenses', function () {
     );
   });
 
+
   it('can be constructed from paths', function () {
     var model1 = {
       foo: 3,
@@ -136,7 +137,19 @@ describe('Lenses', function () {
       fbsLens.get(model2),
       'another string'
     );
+
+    var arrLens = lens.fromPath(['bar', 'array']);
+    assert.deepEqual(
+      arrLens.get(model1),
+      [1, 2, 3]
+    );
+    var model3 = arrLens.over(model1, function (arr) { return arr.slice(1) });
+    assert.deepEqual(
+      arrLens.get(model3),
+      [2, 3]
+    );
   });
+
 
   it('respect function fields on `set`', function () {
     var model1 = {
@@ -160,6 +173,117 @@ describe('Lenses', function () {
       model2.fn()
     );
   });
+
+
+  it('can be abstract', function () {
+    var model1 = {
+      dicts: {
+        fruits: {
+          apple: 'apple',
+          orange: 'orange',
+          banana: 'banana',
+          melons: {
+            water: 'watermelon',
+            friend: 'friend'
+          }
+        }
+      }
+    };
+
+    var getter = function (model, fruitName) {
+      return model.dicts.fruits[fruitName];
+    };
+    var setter = function (model, fruitName, value) {
+      var dictChange = {};
+      dictChange[fruitName] = value;
+
+      return _.assign({}, model, {
+        dicts: _.assign({}, model.dicts, {
+          fruits: _.assign({}, model.dicts.fruits, dictChange)
+        })
+      });
+    };
+
+    var fruitLens = new lens(getter, setter);
+    assert.equal(
+      fruitLens.get(model1, 'apple'),
+      'apple'
+    );
+    assert.deepEqual(
+      fruitLens.get(model1, 'melons'),
+      {
+        water: 'watermelon',
+        friend: 'friend'
+      }
+    );
+
+    var model2 = fruitLens.set(model1, 'pear', 'pearfruit');
+    assert.equal(
+      fruitLens.get(model2, 'apple'),
+      'apple'
+    );
+    assert.deepEqual(
+      fruitLens.get(model2, 'melons'),
+      {
+        water: 'watermelon',
+        friend: 'friend'
+      }
+    );
+    assert.equal(
+      fruitLens.get(model2, 'pear'),
+      'pearfruit'
+    );
+  });
+
+
+  it('can be abstract from paths', function () {
+    var model1 = {
+      dicts: {
+        fruits: {
+          apple: 'apple',
+          orange: 'orange',
+          banana: 'banana',
+          melons: {
+            water: 'watermelon',
+            friend: 'friend'
+          }
+        }
+      }
+    };
+
+    var fruitLens = lens.fromPath(function (fruitName) {
+      return ['dicts', 'fruits', fruitName];
+    });
+
+    assert.equal(
+      fruitLens.get(model1, 'apple'),
+      'apple'
+    );
+    assert.deepEqual(
+      fruitLens.get(model1, 'melons'),
+      {
+        water: 'watermelon',
+        friend: 'friend'
+      }
+    );
+    var model2 = fruitLens.set(model1, 'pear', 'pearfruit');
+    assert.equal(
+      fruitLens.get(model2, 'apple'),
+      'apple'
+    );
+    assert.deepEqual(
+      fruitLens.get(model2, 'melons'),
+      {
+        water: 'watermelon',
+        friend: 'friend'
+      }
+    );
+    assert.equal(
+      fruitLens.get(model2, 'pear'),
+      'pearfruit'
+    );
+  });
+
 
   /*
   The following spec describes a model which is an instance of a class. Since
