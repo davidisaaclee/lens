@@ -145,26 +145,34 @@ module.exports = (function () {
       });
   };
 
-  Lens.fromPath = function (path) {
+  Lens.fromPath = function (path, getTransformer, setTransformer) {
+    var transformers = _.defaults({
+      get: getTransformer,
+      set: setTransformer
+    }, {
+      get: _.identity,
+      set: _.identity
+    });
+
     if (_.isString(path) || _.isArray(path)) {
       var getter = function (m) {
-        return getPath(m, path);
+        return transformers.get(getPath(m, path));
       };
       var setter = function (m, v) {
-        return setPath(m, path, v);
+        return setPath(m, path, transformers.set(v));
       };
 
       return new Lens(getter, setter);
     } else if (_.isFunction(path)) {
       var getter = function (m) {
         var args = _.tail(arguments);
-        return getPath(m, path.apply(null, args));
+        return transformers.get(getPath(m, path.apply(null, args)));
       };
       var setter = function () {
         var model = _.head(arguments);
         var args = _.initial(_.tail(arguments));
         var value = _.last(arguments);
-        return setPath(model, path.apply(null, args), value);
+        return setPath(model, path.apply(null, args), transformers.set(value));
       };
 
       return new Lens(getter, setter);

@@ -285,6 +285,37 @@ describe('Lenses', function () {
   });
 
 
+  it('support transformers via `fromPath`', function () {
+    var model1 = {
+      foo: 3,
+      bar: {
+        array: [1,2,3],
+        string: 'a string'
+      }
+    };
+
+
+    var addOne = function (n) { return n + 1 };
+    var minusOne = function (n) { return n - 1 };
+    var fbsLens = lens.fromPath('foo', addOne, minusOne);
+    var plainFbsLens = lens.fromPath('foo');
+
+    assert.equal(
+      fbsLens.get(model1),
+      4
+    );
+    assert.equal(
+      plainFbsLens.get(model1),
+      3
+    );
+    var model2 = fbsLens.set(model1, 10);
+    assert.equal(
+      plainFbsLens.get(model2),
+      9
+    );
+  });
+
+
   /*
   The following spec describes a model which is an instance of a class. Since
     these lenses try to be immutable and create new copies of the models,
