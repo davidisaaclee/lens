@@ -4,8 +4,10 @@ var lens = require('../lens');
 
 describe('Lenses', function () {
   beforeEach(function () {
-    var barStringLens = (function () {
-      var getter = function (m) { return m.bar.array };
+    var barArrayLens = (function () {
+      var getter = function (m) {
+        return m.bar.array
+      };
       var setter = function (m, v) {
         return _.assign({}, m, {
           bar: _.assign({}, m.bar, {
@@ -13,7 +15,9 @@ describe('Lenses', function () {
           })
         });
       };
-      return new lens(getter, setter);
+      var r = new lens(getter, setter);
+      r.name = 'barArrayLens';
+      return r;
     })();
 
     var firstLens = (function () {
@@ -24,11 +28,13 @@ describe('Lenses', function () {
         return result;
       };
 
-      return new lens(getter, setter);
+      var r = new lens(getter, setter);
+      r.name = 'firstLens';
+      return r;
     })();
 
     _.assign(this, {
-      barStringLens: barStringLens,
+      barArrayLens: barArrayLens,
       firstLens: firstLens
     });
   });
@@ -44,42 +50,58 @@ describe('Lenses', function () {
     };
 
     assert.deepEqual(
-      this.barStringLens.get(model1),
+      this.barArrayLens.get(model1),
       [1,2,3]
     );
 
-    var model2 = this.barStringLens.set(model1, [3,4,5]);
+    var model2 = this.barArrayLens.set(model1, [3,4,5]);
 
     assert.deepEqual(
-      this.barStringLens.get(model1),
+      this.barArrayLens.get(model1),
       [1,2,3]
     );
     assert.deepEqual(
-      this.barStringLens.get(model2),
+      this.barArrayLens.get(model2),
       [3,4,5]
     );
 
-    var model3 = this.barStringLens.over(model1, function (v) {
+    var model3 = this.barArrayLens.over(model1, function (v) {
       return v.map(function (elm) { return elm + 1 });
     });
     assert.deepEqual(
-      this.barStringLens.get(model1),
+      this.barArrayLens.get(model1),
       [1,2,3]
     );
     assert.deepEqual(
-      this.barStringLens.get(model3),
+      this.barArrayLens.get(model3),
       [2,3,4]
+    );
+
+
+    var arrModel = [ 1, 2, 3 ];
+    assert.equal(
+      this.firstLens.get(arrModel),
+      1
+    );
+    var arrModel2 = this.firstLens.set(arrModel, 10);
+    assert.equal(
+      this.firstLens.get(arrModel2),
+      10
+    );
+    assert.equal(
+      this.firstLens.get(arrModel),
+      1
     );
   });
 
 
   it('can compose', function () {
-    var firstBarString = lens.compose(this.barStringLens, this.firstLens);
+    var firstBarString = lens.compose(this.barArrayLens, this.firstLens);
 
     var model1 = {
       foo: 3,
       bar: {
-        array: [1,2,3],
+        array: [ 1, 2, 3 ],
         string: 'a string'
       }
     };
@@ -108,6 +130,62 @@ describe('Lenses', function () {
     assert.deepEqual(
       firstBarString.get(model3),
       2
+    );
+  });
+
+
+  it('can compose more than two lenses', function () {
+    var aLens = (function () {
+      var getter = function (m) { return m.a };
+      var setter = function (m, v) {
+        return _.assign({}, m, {
+          a: v
+        });
+      };
+      return new lens(getter, setter);
+    })();
+    var bLens = (function () {
+      var getter = function (m) { return m.b };
+      var setter = function (m, v) {
+        return _.assign({}, m, {
+          b: v
+        });
+      };
+      return new lens(getter, setter);
+    })();
+    var cLens = (function () {
+      var getter = function (m) { return m.c };
+      var setter = function (m, v) {
+        return _.assign({}, m, {
+          c: v
+        });
+      };
+      return new lens(getter, setter);
+    })();
+
+    var model1 = {
+      a: {
+        b: {
+          c: 1
+        }
+      }
+    };
+
+    abcLens = lens.compose(aLens, bLens, cLens);
+    assert.equal(
+      abcLens.get(model1),
+      1
+    );
+
+    var model2 = abcLens.set(model1, 3)
+
+    assert.equal(
+      abcLens.get(model2),
+      3
+    );
+    assert.equal(
+      abcLens.get(model1),
+      1
     );
   });
 
@@ -235,6 +313,65 @@ describe('Lenses', function () {
     );
   });
 
+  it('can be multi-dimensionally abstract', function () {
+    var model1 = {
+      dicts: {
+        fruits: {
+          apple: ['delicious', 'granny smith', 'golden'],
+          orange: ['orange', 'mandarin', 'clementine'],
+          melon: ['water', 'bitter']
+        }
+      }
+    };
+
+    var getter = function (model, fruitName, idx) {
+      return model.dicts.fruits[fruitName][idx];
+    };
+    var setter = function (model, fruitName, idx, value) {
+      var dictChange = {};
+      var arrCopy = model.dicts.fruits[fruitName].slice(0);
+      arrCopy.splice(idx, 0, value);
+      dictChange[fruitName] = arrCopy;
+
+      return _.assign({}, model, {
+        dicts: _.assign({}, model.dicts, {
+          fruits: _.assign({}, model.dicts.fruits, dictChange)
+        })
+      });
+    };
+
+    var fruitLens = new lens(getter, setter);
+    assert.equal(
+      fruitLens.get(model1, 'apple', 1),
+      'granny smith'
+    );
+    var model2 = fruitLens.set(model1, 'melon', 0, 'summer');
+    assert.equal(
+      fruitLens.get(model2, 'melon', 0),
+      'summer'
+    );
+    assert.equal(
+      fruitLens.get(model1, 'melon', 0),
+      'water'
+    );
+
+    var objLens = lens.fromPath(function () { return _.toArray(arguments) });
+
+    assert.equal(
+      objLens.get(model1, 'dicts', 'fruits', 'apple', '0'),
+      'delicious'
+    );
+    assert.deepEqual(
+      objLens.get(model1, 'dicts', 'fruits', 'melon'),
+      model1.dicts.fruits.melon
+    );
+    var model3 = objLens.set(model1, 'dicts', 'FEED ME');
+    assert.deepEqual(
+      model3,
+      {dicts: 'FEED ME'}
+    );
+  });
+
 
   it('can be abstract from paths', function () {
     var model1 = {
@@ -312,6 +449,75 @@ describe('Lenses', function () {
     assert.equal(
       plainFbsLens.get(model2),
       9
+    );
+  });
+
+
+  it('can compose abstract lenses', function () {
+    var model1 = {
+      bar: {
+        array: [ 1, 2, 3 ],
+        string: 'a string'
+      }
+    };
+
+    var barLens = lens.fromPath(function (key) { return [ 'bar', key ] });
+    var nthLens = lens.fromPath(function (idx) { return [ idx ] });
+
+    var barNthLens = lens.compose(barLens, nthLens);
+
+    assert.equal(
+      barNthLens.get(model1, ['array'], [0]),
+      1
+    );
+    assert.equal(
+      barNthLens.get(model1, ['array'], [1]),
+      2
+    );
+
+    var model2 = barNthLens.set(model1, ['array'], [2], 'new value');
+    assert.equal(
+      barNthLens.get(model2, ['array'], [0]),
+      1
+    );
+    assert.equal(
+      barNthLens.get(model2, ['array'], [2]),
+      'new value'
+    );
+  });
+
+
+  it('can compose varargs abstract lenses', function () {
+    var objLens = lens.fromPath(function () { return _.toArray(arguments) });
+    var barLens = lens.fromPath(function (key) { return [ 'bar', key ] });
+    var nthLens = lens.fromPath(function (idx) { return [ idx ] });
+
+    var path_bar_nth_lens = lens.compose(objLens, barLens, nthLens);
+
+    var model1 = {
+      a: {
+        b: {
+          bar: {
+            a: [ 2, 3, 5, 8 ],
+            b: 0
+          }
+        }
+      }
+    };
+
+    assert.equal(
+      path_bar_nth_lens.get(model1, ['a', 'b'], ['a'], [1]),
+      model1.a.b.bar.a[1]
+    );
+
+    var model2 = path_bar_nth_lens.set(model1, ['a', 'b'], ['a'], [3], 42);
+    assert.equal(
+      path_bar_nth_lens.get(model2, ['a', 'b'], ['a'], [3]),
+      42
+    );
+    assert.equal(
+      path_bar_nth_lens.get(model1, ['a', 'b'], ['a'], [1]),
+      model1.a.b.bar.a[1]
     );
   });
 

@@ -132,17 +132,60 @@ module.exports = (function () {
   };
 
   Lens.compose = function () {
-    return Array.prototype.slice.call(arguments)
-      .reduce(function (outer, inner) {
-        return new Lens(
-          function (m) {
-            return inner.get(outer.get(m));
-          },
-          function (m, v) {
-            return outer.set(m, inner.set(outer.get(m), v));
+    var sublenses = _.toArray(arguments);
+    var getter = function () {
+      var model = _.head(arguments);
+      var args = _.tail(arguments);
+
+      return (function _get (lenses, argList, m) {
+        var l = _.head(lenses);
+        var a = _.head(argList);
+        var tlLenses = _.tail(lenses);
+        var tlArgs = _.tail(argList);
+
+        var localGet = l.get.apply(null, [m].concat(a));
+        if (tlLenses.length == 0) {
+          return localGet;
+        } else {
+          return _get(tlLenses, tlArgs, localGet);
+        }
+      })(sublenses, args, model);
+    };
+
+    var setter = function () {
+      var model = _.head(arguments);
+      var args = _.initial(_.tail(arguments));
+      var value = _.last(arguments);
+
+      return (function _set (lenses, argList, m, v) {
+        var l = _.head(lenses);
+        var a = _.head(argList);
+
+        var tlLenses = _.tail(lenses);
+        var tlArgs = _.tail(argList);
+
+        if (tlLenses.length == 0) {
+          if (a != null) {
+            return l.set.apply(null, [m].concat(a).concat([v]));
+          } else {
+            return l.set(m, v);
           }
-        );
-      });
+        } else {
+          var localGet = l.get.apply(null, [m].concat(a));
+          var recur = _set(tlLenses, tlArgs, localGet, v);
+
+          if (a != null) {
+            var result = l.set.apply(null, [m].concat(a).concat([recur]));
+            return result;
+          } else {
+            var result = l.set(m, recur);
+            return result;
+          }
+        }
+      })(sublenses, args, model, value);
+    };
+
+    return new Lens(getter, setter);
   };
 
   Lens.fromPath = function (path, getTransformer, setTransformer) {
